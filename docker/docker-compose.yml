@@ -1,0 +1,120 @@
+
+services:
+  # =========================
+  # BASE DE DONNÉES POSTGRES
+  # =========================
+  postgres:
+    image: postgres:14  # Image officielle Postgres, version 14
+    container_name: jouz_postgres  # Nom du conteneur (plus pratique à identifier)
+    environment:  # Variables d'environnement pour configurer Postgres
+      POSTGRES_USER: airflow        # utilisateur principal
+      POSTGRES_PASSWORD: airflow    # mot de passe de l'utilisateur
+      POSTGRES_DB: warehouse        # base de données par défaut créée
+    ports:
+      - "55432:5432"  # Mappe le port local 55432 → port interne 5432 (évite conflit avec ton poste)
+    volumes:
+      - ./postgres_data:/var/lib/postgresql/data
+      # Volume persistant → stocke les données même si le conteneur est supprimé
+
+  # =========================
+  # INITIALISATION D'AIRFLOW
+  # (création DB + user admin)
+  # =========================
+  airflow-init:
+    image: apache/airflow:2.9.2  # Image officielle Apache Airflow
+    container_name: airflow_init
+    entrypoint: /bin/bash  # On lance bash pour exécuter plusieurs commandes
+    command:
+      - -c
+      - |
+        # Initialiser la base de données Airflow
+        airflow db init && \
+        # Créer un utilisateur admin (login=admin / mdp=admin)
+        airflow users create \
+          --username admin \
+          --firstname Admin \
+          --lastname User \
+          --role Admin \
+          --email admin@example.com \
+          --password admin
+    environment:
+      - AIRFLOW__CORE__EXECUTOR=LocalExecutor  # Type d’exécuteur (LocalExecutor = simple, efficace en local)
+      - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://airflow:airflow@postgres/warehouse
+      # Chaîne de connexion à Postgres (user=airflow, pass=airflow, host=postgres, db=warehouse)
+      - AIRFLOW__CORE__FERNET_KEY=temporary_fernet_key
+      # Clé utilisée par Airflow pour chiffrer certaines données sensibles
+    depends_on:
+      - postgres  # airflow-init démarre seulement quand Postgres est prêt
+    volumes:
+      - ../airflow/dags:/opt/airflow/dags
+      # Monte ton dossier local airflow/dags dans le conteneur pour que tes DAGs soient visibles
+
+  # =========================
+  # SERVEUR WEB AIRFLOW
+  # =========================
+  airflow-webserver:
+    image: apache/airflow:2.9.2
+    container_name: airflow_webserver
+    restart: always  # Redémarre automatiquement en cas de crash
+    depends_on:
+      - postgres
+    environment:
+      - AIRFLOW__CORE__EXECUTOR=LocalExecutor
+      - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://airflow:airflow@postgres/warehouse
+      - AIRFLOW__CORE__FERNET_KEY=temporary_fernet_key
+    ports:
+      - "9090:8080"  # Web UI → accessible via localhost:9090 au lieu de 8080
+    command: webserver  # Commande lancée : démarrer l'interface Web
+    volumes:
+      - ../airflow/dags:/opt/airflow/dags
+
+  # =========================
+  # SCHEDULER AIRFLOW
+  # (exécute les DAGs selon leur planification)
+  # =========================
+  airflow-scheduler:
+    image: apache/airflow:2.9.2
+    container_name: airflow_scheduler
+    restart: always
+    depends_on:
+      - airflow-webserver  # Le scheduler démarre après le webserver
+    environment:
+      - AIRFLOW__CORE__EXECUTOR=LocalExecutor
+      - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://airflow:airflow@postgres/warehouse
+      - AIRFLOW__CORE__FERNET_KEY=temporary_fernet_key
+    command: scheduler  # Commande lancée : le scheduler
+    volumes:
+      - ../airflow/dags:/opt/airflow/dags
+
+  # =========================
+  # DBT (DATA BUILD TOOL)
+  # =========================
+  dbt:                       # Service dbt
+    image: ghcr.io/dbt-labs/dbt-postgres:1.8.2
+    platform: linux/amd64    # 👈 obligé sur Mac M1/M2
+    container_name: jouz_dbt
+    depends_on:
+      - postgres             # Attendre que postgres soit prêt
+    working_dir: /usr/app    # Dossier de travail dans le conteneur
+    volumes:
+      - ./dbt:/usr/app       # Monte ton projet local ./dbt dans le conteneur
+    command: "sleep infinity" # 👈 garde le conteneur en vie
+
+  # =========================
+  # METABASE
+  # (outil de BI / reporting)
+  # =========================
+  metabase:
+    image: metabase/metabase:latest   # Image officielle Metabase
+    container_name: jouz_metabase
+    restart: always                   # Redémarre en cas de crash
+    ports:
+      - "9091:3000"                   # UI disponible sur http://localhost:9091
+    environment:
+      MB_DB_FILE: /metabase-data/metabase.db
+      # Base interne de Metabase (pour stocker users, dashboards, etc.)
+    volumes:
+      - ./metabase_data:/metabase-data
+      # Volume persistant pour que tes dashboards ne disparaissent pas
+    depends_on:
+      - postgres                      # Metabase attend que Postgres soit prêt
