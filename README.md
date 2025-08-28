@@ -7,6 +7,7 @@
 * notebooks/ → tester des requêtes, du ML léger (PoC rapide).
 * docs/ → garder les ateliers métiers, KPIs, specs techniques.
 
+
 │── airflow/      # DAGs, configs Airflow
 │── data/         # Données sources (CSV, JSON, logs, tests…)
 │── dbt/          # Modèles dbt, seeds, tests
