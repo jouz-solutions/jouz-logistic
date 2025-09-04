@@ -89,16 +89,28 @@ services:
   # =========================
   # DBT (DATA BUILD TOOL)
   # =========================
-  dbt:                       # Service dbt
-    image: ghcr.io/dbt-labs/dbt-postgres:1.8.2
-    platform: linux/amd64    # 👈 obligé sur Mac M1/M2
+  # ----------------------------
+  # dbt (transformations de données)
+  # ----------------------------
+  # ----------------------------
+  # dbt (transformations de données)
+  # ----------------------------
+  dbt:
+    build:
+      context: .               # dossier contenant Dockerfile.dbt
+      dockerfile: Dockerfile.dbt
     container_name: jouz_dbt
     depends_on:
-      - postgres             # Attendre que postgres soit prêt
-    working_dir: /usr/app    # Dossier de travail dans le conteneur
+      - postgres
+    working_dir: /usr/app
     volumes:
-      - ./dbt:/usr/app       # Monte ton projet local ./dbt dans le conteneur
-    command: "sleep infinity" # 👈 garde le conteneur en vie
+      - ./dbt/my_project:/usr/app       # projet DBT
+      - ./dbt/profiles.yml:/root/.dbt/profiles.yml  # fichier profile unique
+    tty: true
+    stdin_open: true
+    command: tail -f /dev/null
+
+
 
   # =========================
   # METABASE

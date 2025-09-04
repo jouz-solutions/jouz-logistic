@@ -1,0 +1,34 @@
+jouz_project:
+  outputs:
+    dev:
+      dbname: postgres
+      host: postgres
+      password: postgres
+      port: 5432
+      schema: public
+      type: postgres
+      user: postgres
+  target: dev
+my_project:
+  outputs:
+    dev:
+      dbname: warehouse
+      host: postgres
+      pass: publicpostgr;;
+      port: 5432
+      schema: analytics
+      threads: 1
+      type: postgres
+      user: postgres
+  target: dev
+my_project:
+  target: dev
+  outputs:
+    dev:
+      type: postgres
+      host: postgres     # si dbt est aussi dans Docker et sur le même réseau que Postgres
+      user: airflow
+      password: airflow
+      port: 5432
+      dbname: warehouse
+      schema: analytics  # tu peux mettre "public" si tu n’as pas encore créé "analytics"
